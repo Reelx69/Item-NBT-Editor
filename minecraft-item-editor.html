@@ -205,6 +205,7 @@
     resize:vertical;line-height:1.6;height:130px;width:100%;
     outline:none;
   }
+  .give-textarea{color:#a8d8a8 !important;height:90px !important}
   .copy-btns{display:flex;gap:6px;flex-wrap:wrap}
   .copy-btn{
     flex:1;min-width:120px;background:var(--surface3);border:1px solid var(--border2);
@@ -214,6 +215,23 @@
   }
   .copy-btn:hover{border-color:var(--accent);color:var(--accent2);background:var(--accent-glow)}
   .copy-btn.copied{border-color:var(--success);color:var(--success);background:rgba(80,192,128,0.1)}
+
+  /* Give command */
+  .give-settings{display:flex;flex-direction:column;gap:8px}
+  .give-row{display:flex;gap:8px;align-items:flex-end}
+  .target-pills{display:flex;gap:3px;flex-wrap:wrap;margin-top:5px}
+  .tpill{
+    padding:3px 9px;font-size:12px;font-family:'JetBrains Mono',monospace;
+    border:1px solid var(--border2);border-radius:20px;background:transparent;
+    color:var(--text3);cursor:pointer;transition:all .12s;
+  }
+  .tpill:hover{border-color:var(--accent);color:var(--accent2)}
+  .tpill.active{background:rgba(124,92,191,0.2);border-color:var(--accent);color:var(--accent2)}
+  .version-badge{
+    font-size:11px;padding:2px 7px;border-radius:3px;
+    background:rgba(80,192,128,0.1);border:1px solid rgba(80,192,128,0.25);
+    color:var(--success);font-family:'JetBrains Mono',monospace;
+  }
 
   /* Scrollbar */
   ::-webkit-scrollbar{width:6px}
@@ -305,6 +323,54 @@
         </div>
       </div>
     </div>
+
+    <!-- Give command -->
+    <div>
+      <div class="preview-title" style="display:flex;align-items:center;justify-content:space-between">
+        Give Command
+        <span class="version-badge" id="versionBadge">Java 26.1+</span>
+      </div>
+      <div class="give-settings">
+        <div class="give-row">
+          <div class="field" style="flex:1">
+            <label>version</label>
+            <select id="versionSelect" onchange="syncGiveSettings();render()">
+              <option value="26.1+">Java 26.1+</option>
+              <option value="1.21.11">Java 1.21.11</option>
+              <option value="1.21.9">Java 1.21.9</option>
+              <option value="1.21.6-1.21.8">Java 1.21.6 – 1.21.8</option>
+              <option value="1.21.5">Java 1.21.5</option>
+              <option value="1.21.4">Java 1.21.4</option>
+              <option value="1.21.2">Java 1.21.2</option>
+              <option value="1.21">Java 1.21</option>
+            </select>
+          </div>
+          <div class="field" style="width:110px">
+            <label>cmd prefix</label>
+            <input type="text" id="idPrefix" placeholder="minecraft:" value="minecraft:" oninput="syncGiveSettings();render()"/>
+          </div>
+        </div>
+        <div class="field">
+          <label>target</label>
+          <div class="target-pills">
+            <button class="tpill active" data-t="@p"           onclick="setTarget('@p')">@p</button>
+            <button class="tpill"        data-t="@a"           onclick="setTarget('@a')">@a</button>
+            <button class="tpill"        data-t="@r"           onclick="setTarget('@r')">@r</button>
+            <button class="tpill"        data-t="@s"           onclick="setTarget('@s')">@s</button>
+            <button class="tpill"        data-t="@e"           onclick="setTarget('@e[type=player]')">@e[type=player]</button>
+            <button class="tpill"        data-t="custom"       onclick="setTarget('custom')">custom…</button>
+          </div>
+          <input type="text" id="customTarget" placeholder="PlayerName"
+            style="display:none;margin-top:6px" oninput="syncGiveSettings();render()"/>
+        </div>
+      </div>
+      <div class="output-box" style="margin-top:10px">
+        <textarea class="output-textarea give-textarea" id="giveBox" readonly></textarea>
+        <div class="copy-btns">
+          <button class="copy-btn" id="copyGive" onclick="copyGive()">copy /give command</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -329,6 +395,10 @@ let state = {
   glint: false,
   hideAttrs: false,
   hideTooltip: false,
+  version: "26.1+",
+  giveTarget: "@p",
+  customTarget: "",
+  idPrefix: "minecraft:",
   displayName: [
     {text:"+8 Iron Blocks",color:"green",bold:true,italic:false,obfuscated:false,strikethrough:false,underlined:false}
   ],
@@ -383,6 +453,88 @@ function parseNbt(str) {
       hideTooltip: !!c["minecraft:hide_additional_tooltip"],
     };
   } catch(e) { return null; }
+}
+
+// ─── Give Command Generator ───
+// Versions where the 1.21.5 component overhaul applies
+const V_NEW = ["26.1+","1.21.11","1.21.9","1.21.6-1.21.8","1.21.5"];
+
+function segToJson(seg) {
+  const o = {text: seg.text, color: seg.color || "white", italic: !!seg.italic};
+  if(seg.bold)          o.bold = true;
+  if(seg.obfuscated)    o.obfuscated = true;
+  if(seg.strikethrough) o.strikethrough = true;
+  if(seg.underlined)    o.underlined = true;
+  return o;
+}
+
+function segsToTextComp(segs) {
+  if(!segs || !segs.length) return '{"text":""}';
+  if(segs.length === 1) return JSON.stringify(segToJson(segs[0]));
+  // Array form: ["", seg, seg, ...] — valid in all 1.20.5+ versions
+  return JSON.stringify(["", ...segs.map(segToJson)]);
+}
+
+function genGiveCmd() {
+  const ver = state.version;
+  const isNew = V_NEW.includes(ver);
+
+  const target = state.giveTarget === "custom"
+    ? (state.customTarget.trim() || "PlayerName")
+    : state.giveTarget;
+
+  const prefix = state.idPrefix.trim(); // e.g. "minecraft:" → "minecraft:give"
+  const cmd = prefix ? `${prefix}give` : "give";
+  const rawId = state.id.includes(":") ? state.id : `minecraft:${state.id}`;
+
+  const nameTc  = segsToTextComp(state.displayName);
+  const loreTcs = state.lore.map(l => `'${segsToTextComp(l)}'`).join(",");
+
+  const parts = [];
+  parts.push(`minecraft:custom_name='${nameTc}'`);
+  parts.push(`minecraft:lore=[${loreTcs}]`);
+
+  if(state.glint) {
+    parts.push(`minecraft:enchantment_glint_override=true`);
+  }
+  if(state.hideAttrs) {
+    parts.push(isNew
+      ? `minecraft:attribute_modifiers=[]`
+      : `minecraft:attribute_modifiers={modifiers:[],show_in_tooltip:false}`);
+  }
+  if(state.hideTooltip) {
+    parts.push(`minecraft:hide_additional_tooltip={}`);
+  }
+
+  return `${cmd} ${target} ${rawId}[${parts.join(",")}] ${state.count}`;
+}
+
+function syncGiveSettings() {
+  state.version      = document.getElementById("versionSelect").value;
+  state.idPrefix     = document.getElementById("idPrefix").value;
+  state.customTarget = document.getElementById("customTarget").value;
+  document.getElementById("versionBadge").textContent = "Java " + state.version;
+}
+
+function setTarget(val) {
+  state.giveTarget = val;
+  document.querySelectorAll(".tpill").forEach(b => b.classList.remove("active"));
+  const key = val.startsWith("@e") ? "@e" : val;
+  const btn = document.querySelector(`.tpill[data-t="${key}"]`);
+  if(btn) btn.classList.add("active");
+  document.getElementById("customTarget").style.display = val === "custom" ? "block" : "none";
+  render();
+}
+
+function copyGive() {
+  const text = document.getElementById("giveBox").value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById("copyGive");
+    const orig = btn.textContent;
+    btn.textContent = "✓ copied!";
+    btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove("copied"); }, 2000);
+  });
 }
 
 // ─── NBT Generator ───
@@ -553,6 +705,9 @@ function syncStateFromDOM() {
   state.glint = document.getElementById("glintToggle").checked;
   state.hideAttrs = document.getElementById("hideAttrsToggle").checked;
   state.hideTooltip = document.getElementById("hideTooltipToggle").checked;
+  state.version = document.getElementById("versionSelect").value;
+  state.idPrefix = document.getElementById("idPrefix").value;
+  state.customTarget = document.getElementById("customTarget").value;
 }
 
 function toggleFmt(segId, key) {
@@ -575,6 +730,18 @@ function syncSettingsToDOM() {
   document.getElementById("glintToggle").checked = state.glint;
   document.getElementById("hideAttrsToggle").checked = state.hideAttrs;
   document.getElementById("hideTooltipToggle").checked = state.hideTooltip;
+  document.getElementById("versionSelect").value = state.version || "26.1+";
+  document.getElementById("idPrefix").value = state.idPrefix || "minecraft:";
+  document.getElementById("versionBadge").textContent = "Java " + (state.version || "26.1+");
+  // restore target pills
+  document.querySelectorAll(".tpill").forEach(b => b.classList.remove("active"));
+  const tgt = state.giveTarget || "@p";
+  const key = tgt.startsWith("@e") ? "@e" : tgt;
+  const btn = document.querySelector(`.tpill[data-t="${key}"]`);
+  if(btn) btn.classList.add("active");
+  const ci = document.getElementById("customTarget");
+  ci.style.display = tgt === "custom" ? "block" : "none";
+  ci.value = state.customTarget || "";
 }
 
 // ─── Drag and drop ───
@@ -714,9 +881,9 @@ function render() {
     html += `<div class="mc-lore-line">${renderSegHtml(line)}</div>`;
   });
   preview.innerHTML = html;
-  // Update output
-  const out = genValue();
-  document.getElementById("outputBox").value = out;
+  // Update outputs
+  document.getElementById("outputBox").value = genValue();
+  document.getElementById("giveBox").value = genGiveCmd();
 }
 
 // ─── Parse panel ───
