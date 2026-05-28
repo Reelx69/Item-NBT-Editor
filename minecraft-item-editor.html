@@ -456,9 +456,10 @@ function parseNbt(str) {
 }
 
 // ─── Give Command Generator ───
-// Versions where the 1.21.5 component overhaul applies
+// Versions where 1.21.5 text-component-as-NBT applies
 const V_NEW = ["26.1+","1.21.11","1.21.9","1.21.6-1.21.8","1.21.5"];
 
+/* ── Pre-1.21.5: text component as JSON string ── */
 function segToJson(seg) {
   const o = {text: seg.text, color: seg.color || "white", italic: !!seg.italic};
   if(seg.bold)          o.bold = true;
@@ -467,43 +468,71 @@ function segToJson(seg) {
   if(seg.underlined)    o.underlined = true;
   return o;
 }
-
 function segsToTextComp(segs) {
   if(!segs || !segs.length) return '{"text":""}';
   if(segs.length === 1) return JSON.stringify(segToJson(segs[0]));
-  // Array form: ["", seg, seg, ...] — valid in all 1.20.5+ versions
   return JSON.stringify(["", ...segs.map(segToJson)]);
 }
 
+/* ── 1.21.5+: text component as direct NBT compound ── */
+function escSnbt(s) { return s.replace(/\\/g,"\\\\").replace(/"/g,'\\"'); }
+function segToNbt(seg) {
+  const p = [
+    `text:"${escSnbt(seg.text)}"`,
+    `color:"${seg.color||"white"}"`,
+    `italic:${!!seg.italic}`
+  ];
+  if(seg.bold)          p.push("bold:true");
+  if(seg.obfuscated)    p.push("obfuscated:true");
+  if(seg.strikethrough) p.push("strikethrough:true");
+  if(seg.underlined)    p.push("underlined:true");
+  return `{${p.join(",")}}`;
+}
+function segsToNbt(segs) {
+  if(!segs||!segs.length) return '{text:""}';
+  if(segs.length === 1) return segToNbt(segs[0]);
+  const first = segs[0];
+  const p = [
+    `text:"${escSnbt(first.text)}"`,
+    `color:"${first.color||"white"}"`,
+    `italic:${!!first.italic}`
+  ];
+  if(first.bold)          p.push("bold:true");
+  if(first.obfuscated)    p.push("obfuscated:true");
+  if(first.strikethrough) p.push("strikethrough:true");
+  if(first.underlined)    p.push("underlined:true");
+  p.push(`extra:[${segs.slice(1).map(segToNbt).join(",")}]`);
+  return `{${p.join(",")}}`;
+}
+
 function genGiveCmd() {
-  const ver = state.version;
+  const ver   = state.version;
   const isNew = V_NEW.includes(ver);
 
   const target = state.giveTarget === "custom"
     ? (state.customTarget.trim() || "PlayerName")
     : state.giveTarget;
 
-  const prefix = state.idPrefix.trim(); // e.g. "minecraft:" → "minecraft:give"
-  const cmd = prefix ? `${prefix}give` : "give";
-  const rawId = state.id.includes(":") ? state.id : `minecraft:${state.id}`;
-
-  const nameTc  = segsToTextComp(state.displayName);
-  const loreTcs = state.lore.map(l => `'${segsToTextComp(l)}'`).join(",");
+  const prefix = state.idPrefix.trim();
+  const cmd    = prefix ? `${prefix}give` : "give";
+  const rawId  = state.id.includes(":") ? state.id : `minecraft:${state.id}`;
 
   const parts = [];
-  parts.push(`minecraft:custom_name='${nameTc}'`);
-  parts.push(`minecraft:lore=[${loreTcs}]`);
 
-  if(state.glint) {
-    parts.push(`minecraft:enchantment_glint_override=true`);
-  }
-  if(state.hideAttrs) {
-    parts.push(isNew
-      ? `minecraft:attribute_modifiers=[]`
-      : `minecraft:attribute_modifiers={modifiers:[],show_in_tooltip:false}`);
-  }
-  if(state.hideTooltip) {
-    parts.push(`minecraft:hide_additional_tooltip={}`);
+  if(isNew) {
+    // 1.21.5+: direct NBT compound — no outer string quotes
+    parts.push(`minecraft:custom_name=${segsToNbt(state.displayName)}`);
+    parts.push(`minecraft:lore=[${state.lore.map(l=>segsToNbt(l)).join(",")}]`);
+    if(state.glint)      parts.push("minecraft:enchantment_glint_override=true");
+    if(state.hideAttrs)  parts.push("minecraft:attribute_modifiers=[]");
+    if(state.hideTooltip)parts.push("minecraft:hide_additional_tooltip={}");
+  } else {
+    // 1.21 – 1.21.4: JSON text component wrapped in SNBT single-quoted string
+    parts.push(`minecraft:custom_name='${segsToTextComp(state.displayName)}'`);
+    parts.push(`minecraft:lore=[${state.lore.map(l=>`'${segsToTextComp(l)}'`).join(",")}]`);
+    if(state.glint)      parts.push("minecraft:enchantment_glint_override=true");
+    if(state.hideAttrs)  parts.push("minecraft:attribute_modifiers={modifiers:[],show_in_tooltip:false}");
+    if(state.hideTooltip)parts.push("minecraft:hide_additional_tooltip={}");
   }
 
   return `${cmd} ${target} ${rawId}[${parts.join(",")}] ${state.count}`;
