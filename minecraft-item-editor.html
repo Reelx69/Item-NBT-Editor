@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Minecraft Item Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0e0e12;
+    --surface:#16161e;
+    --surface2:#1e1e2a;
+    --surface3:#252535;
+    --border:#2e2e42;
+    --border2:#3a3a52;
+    --text:#e0e0f0;
+    --text2:#9090aa;
+    --text3:#5a5a72;
+    --accent:#7c5cbf;
+    --accent2:#9b7de0;
+    --accent-glow:rgba(124,92,191,0.25);
+    --danger:#c05050;
+    --danger-dim:rgba(192,80,80,0.15);
+    --success:#50c080;
+    --gold:#ffaa00;
+    --radius:8px;
+    --radius-sm:5px;
+  }
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    min-height:100vh;
+    line-height:1.5;
+  }
+
+  /* Layout */
+  .app{display:grid;grid-template-columns:1fr 340px;min-height:100vh;gap:0}
+  .editor-col{padding:28px 24px;border-right:1px solid var(--border);overflow-y:auto;max-height:100vh}
+  .preview-col{padding:28px 20px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;max-height:100vh;background:var(--surface)}
+
+  /* Header */
+  .app-header{display:flex;align-items:center;gap:10px;margin-bottom:24px}
+  .app-header h1{font-size:18px;font-weight:600;letter-spacing:-0.02em;color:var(--text)}
+  .logo-icon{width:28px;height:28px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+  .header-sub{font-size:12px;color:var(--text3);margin-left:auto}
+
+  /* Section */
+  .section{margin-bottom:22px}
+  .section-label{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .section-label::after{content:"";flex:1;height:1px;background:var(--border)}
+
+  /* Form rows */
+  .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:11px;color:var(--text3);font-weight:500}
+  .field.grow{flex:1;min-width:140px}
+  .field.w70{width:72px}
+
+  /* Inputs */
+  input[type=text],input[type=number],select,textarea{
+    background:var(--surface2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:var(--radius-sm);
+    padding:7px 10px;
+    font-size:13px;
+    font-family:'Inter',sans-serif;
+    outline:none;
+    transition:border-color .15s;
+    width:100%;
+  }
+  input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{border-color:var(--accent2);}
+  input[type=text]::placeholder,textarea::placeholder{color:var(--text3)}
+  select{cursor:pointer}
+  textarea{font-family:'JetBrains Mono',monospace;font-size:12px;resize:vertical;line-height:1.6}
+
+  /* Checkboxes */
+  .toggle-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:2px 0}
+  .toggle{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text2);user-select:none}
+  .toggle input[type=checkbox]{
+    -webkit-appearance:none;appearance:none;
+    width:16px;height:16px;border:1px solid var(--border2);
+    background:var(--surface2);border-radius:4px;
+    cursor:pointer;position:relative;flex-shrink:0;transition:background .15s,border-color .15s;
+  }
+  .toggle input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+  .toggle input[type=checkbox]:checked::after{content:"✓";position:absolute;top:-1px;left:2px;font-size:11px;color:#fff}
+
+  /* Segment editor */
+  .seg-card{
+    display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:7px 9px;margin-bottom:5px;
+    transition:border-color .15s;
+  }
+  .seg-card:hover{border-color:var(--border2)}
+  .seg-text{flex:1;min-width:100px;font-family:'JetBrains Mono',monospace;font-size:12px}
+  .color-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
+  .color-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;border:1px solid rgba(255,255,255,0.15)}
+  .color-select{width:108px;font-size:12px}
+  .color-picker{
+    -webkit-appearance:none;appearance:none;
+    width:24px;height:24px;border:1px solid var(--border2);border-radius:4px;
+    background:none;padding:2px;cursor:pointer;flex-shrink:0;
+  }
+  .color-picker::-webkit-color-swatch-wrapper{padding:0}
+  .color-picker::-webkit-color-swatch{border:none;border-radius:2px}
+  .hex-input{width:82px;font-family:'JetBrains Mono',monospace;font-size:12px;padding:5px 7px;flex-shrink:0}
+  .fmt-btns{display:flex;gap:2px;flex-shrink:0}
+  .fmt-btn{
+    width:24px;height:24px;border:1px solid var(--border);
+    background:transparent;color:var(--text3);
+    border-radius:4px;cursor:pointer;font-size:11px;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .12s;user-select:none;
+  }
+  .fmt-btn:hover{border-color:var(--border2);color:var(--text2)}
+  .fmt-btn.active{background:rgba(124,92,191,0.2);border-color:var(--accent);color:var(--accent2)}
+  .fmt-btn.bold-btn{font-weight:700}
+  .fmt-btn.italic-btn{font-style:italic}
+  .fmt-btn.strike-btn{text-decoration:line-through}
+  .fmt-btn.under-btn{text-decoration:underline}
+  .remove-btn{
+    width:22px;height:22px;background:transparent;border:1px solid var(--border);
+    color:var(--text3);border-radius:4px;cursor:pointer;font-size:16px;
+    display:flex;align-items:center;justify-content:center;line-height:1;
+    transition:all .12s;flex-shrink:0;
+  }
+  .remove-btn:hover{background:var(--danger-dim);border-color:var(--danger);color:var(--danger)}
+
+  /* Lore line */
+  .lore-line{margin-bottom:10px;padding-left:10px;border-left:2px solid var(--border2);transition:box-shadow .1s}
+  .lore-line-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+  .line-num{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace}
+  .lore-line-btns{display:flex;gap:4px}
+
+  /* Drag and drop */
+  .drag-handle{cursor:grab;color:var(--text3);font-size:14px;padding:0 4px 0 0;flex-shrink:0;user-select:none;opacity:0.4;transition:opacity .12s;line-height:1}
+  .drag-handle:hover{opacity:1;color:var(--text2)}
+  .dragging{opacity:0.3 !important;background:var(--surface3) !important}
+  .drop-top{box-shadow:0 -2px 0 0 var(--accent2) !important}
+  .drop-bottom{box-shadow:0 2px 0 0 var(--accent2) !important}
+  .lore-line.drop-top{border-left-color:var(--accent2);box-shadow:0 -2px 0 0 var(--accent2)}
+  .lore-line.drop-bottom{border-left-color:var(--accent2);box-shadow:0 2px 0 0 var(--accent2)}
+
+  /* Small buttons */
+  .btn{
+    background:transparent;border:1px solid var(--border2);color:var(--text2);
+    border-radius:var(--radius-sm);padding:4px 11px;font-size:12px;
+    cursor:pointer;transition:all .12s;font-family:'Inter',sans-serif;
+  }
+  .btn:hover{border-color:var(--border2);background:var(--surface3);color:var(--text)}
+  .btn.danger:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-dim)}
+  .btn.add-main{padding:6px 14px;border-style:dashed;color:var(--text3);font-size:12px;width:100%;text-align:center;margin-top:4px}
+  .btn.add-main:hover{border-color:var(--accent);color:var(--accent2);background:var(--accent-glow)}
+
+  /* Parse panel */
+  .parse-panel{
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:var(--radius);padding:14px;margin-bottom:22px;
+  }
+  .parse-panel .hint{font-size:12px;color:var(--text3);margin-bottom:8px}
+  .parse-panel .error{font-size:12px;color:var(--danger);margin-top:6px}
+  .parse-actions{display:flex;gap:8px;margin-top:10px}
+  .btn-primary{
+    background:var(--accent);border:none;color:#fff;
+    border-radius:var(--radius-sm);padding:6px 16px;
+    font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;
+    transition:background .12s;
+  }
+  .btn-primary:hover{background:var(--accent2)}
+
+  /* ───── PREVIEW COL ───── */
+  .preview-title{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:12px}
+
+  /* MC Tooltip */
+  .mc-tooltip-wrap{display:flex;justify-content:center;padding:24px 16px;background:#04000a;border-radius:var(--radius);border:1px solid var(--border)}
+  .mc-tooltip{
+    background:#100018;
+    border:2px solid #5000be;
+    box-shadow:inset 0 0 0 1px #0d0020, 2px 2px 0 #0d0020;
+    border-radius:3px;
+    padding:7px 11px;
+    font-family:'VT323','Courier New',monospace;
+    font-size:18px;
+    line-height:1.35;
+    display:inline-block;
+    min-width:130px;
+    max-width:100%;
+  }
+  .mc-name-row{margin-bottom:2px}
+  .mc-lore-line{font-size:16px}
+  .mc-spacer{height:4px}
+
+  /* Output */
+  .output-box{display:flex;flex-direction:column;gap:8px}
+  .output-textarea{
+    background:#0a0a10;border:1px solid var(--border);
+    color:#8ab4f8;border-radius:var(--radius-sm);
+    padding:10px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    resize:vertical;line-height:1.6;height:130px;width:100%;
+    outline:none;
+  }
+  .copy-btns{display:flex;gap:6px;flex-wrap:wrap}
+  .copy-btn{
+    flex:1;min-width:120px;background:var(--surface3);border:1px solid var(--border2);
+    color:var(--text2);border-radius:var(--radius-sm);
+    padding:7px 10px;font-size:12px;cursor:pointer;text-align:center;
+    transition:all .15s;font-family:'Inter',sans-serif;
+  }
+  .copy-btn:hover{border-color:var(--accent);color:var(--accent2);background:var(--accent-glow)}
+  .copy-btn.copied{border-color:var(--success);color:var(--success);background:rgba(80,192,128,0.1)}
+
+  /* Scrollbar */
+  ::-webkit-scrollbar{width:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+
+  @media(max-width:780px){
+    .app{grid-template-columns:1fr;max-height:none}
+    .editor-col,.preview-col{max-height:none;overflow-y:visible}
+    .preview-col{border-top:1px solid var(--border)}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT: EDITOR -->
+  <div class="editor-col" id="editorCol">
+    <div class="app-header">
+      <div class="logo-icon">⚔</div>
+      <h1>Item Editor</h1>
+      <span class="header-sub">minecraft 1.20.5+ components</span>
+    </div>
+
+    <!-- Parse panel toggle -->
+    <div id="parsePanelToggleRow" style="margin-bottom:14px">
+      <button class="btn" id="toggleParseBtn" onclick="toggleParse()">📋 paste existing value</button>
+    </div>
+    <div class="parse-panel" id="parsePanel" style="display:none">
+      <div class="hint">Paste a <code>Value: '...'</code> string (or just the raw NBT). It will be loaded into the editor.</div>
+      <textarea id="parseInput" rows="4" placeholder="{ components: { ... } ... }"></textarea>
+      <div class="error" id="parseError" style="display:none">Could not parse — check the format.</div>
+      <div class="parse-actions">
+        <button class="btn-primary" onclick="loadParsed()">Load →</button>
+        <button class="btn" onclick="toggleParse()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Item settings -->
+    <div class="section">
+      <div class="section-label">Item settings</div>
+      <div class="row" style="margin-bottom:12px">
+        <div class="field grow">
+          <label>item id</label>
+          <input type="text" id="itemId" placeholder="iron_block" oninput="render()"/>
+        </div>
+        <div class="field w70">
+          <label>count</label>
+          <input type="number" id="itemCount" min="1" max="64" value="1" oninput="render()"/>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <label class="toggle"><input type="checkbox" id="glintToggle" onchange="render()"/> ✦ enchant glint</label>
+        <label class="toggle"><input type="checkbox" id="hideAttrsToggle" onchange="render()"/> hide attributes</label>
+        <label class="toggle"><input type="checkbox" id="hideTooltipToggle" onchange="render()"/> hide tooltip</label>
+      </div>
+    </div>
+
+    <!-- Display name -->
+    <div class="section">
+      <div class="section-label">Display name</div>
+      <div id="nameSegs"></div>
+      <button class="btn add-main" onclick="addNameSeg()">+ add segment</button>
+    </div>
+
+    <!-- Lore -->
+    <div class="section">
+      <div class="section-label">Lore</div>
+      <div id="loreLines"></div>
+      <button class="btn add-main" onclick="addLoreLine()">+ add lore line</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: PREVIEW + OUTPUT -->
+  <div class="preview-col">
+    <div>
+      <div class="preview-title">Preview</div>
+      <div class="mc-tooltip-wrap">
+        <div class="mc-tooltip" id="mcPreview"></div>
+      </div>
+    </div>
+    <div>
+      <div class="preview-title">Output NBT</div>
+      <div class="output-box">
+        <textarea class="output-textarea" id="outputBox" readonly></textarea>
+        <div class="copy-btns">
+          <button class="copy-btn" id="copyNbt" onclick="copyText('nbt')">copy nbt</button>
+          <button class="copy-btn" id="copyVal" onclick="copyText('val')">copy as Value: '...'</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MC_COLORS = {
+  white:"#FFFFFF",gray:"#AAAAAA",dark_gray:"#555555",black:"#111111",
+  gold:"#FFAA00",yellow:"#FFFF55",green:"#55FF55",dark_green:"#00AA00",
+  aqua:"#55FFFF",dark_aqua:"#00AAAA",blue:"#5555FF",dark_blue:"#0000AA",
+  red:"#FF5555",dark_red:"#AA0000",light_purple:"#FF55FF",dark_purple:"#AA00AA",
+};
+const COLOR_LABELS = {
+  white:"White",gray:"Gray",dark_gray:"Dark Gray",black:"Black",
+  gold:"Gold",yellow:"Yellow",green:"Green",dark_green:"Dark Green",
+  aqua:"Aqua",dark_aqua:"Dark Aqua",blue:"Blue",dark_blue:"Dark Blue",
+  red:"Red",dark_red:"Dark Red",light_purple:"Light Purple",dark_purple:"Dark Purple",
+};
+
+// State
+let state = {
+  id: "iron_block",
+  count: 8,
+  glint: false,
+  hideAttrs: false,
+  hideTooltip: false,
+  displayName: [
+    {text:"+8 Iron Blocks",color:"green",bold:true,italic:false,obfuscated:false,strikethrough:false,underlined:false}
+  ],
+  lore: [
+    [{text:"",color:"gray",bold:false,italic:false,obfuscated:false,strikethrough:false,underlined:false}],
+    [
+      {text:"Rarity: ",color:"gray",bold:false,italic:false,obfuscated:false,strikethrough:false,underlined:false},
+      {text:"Common",color:"aqua",bold:false,italic:false,obfuscated:false,strikethrough:false,underlined:false}
+    ],
+    [
+      {text:"Chance: ",color:"gray",bold:false,italic:false,obfuscated:false,strikethrough:false,underlined:false},
+      {text:"50%",color:"aqua",bold:false,italic:false,obfuscated:false,strikethrough:false,underlined:false}
+    ],
+    [{text:"",color:"gray",bold:false,italic:false,obfuscated:false,strikethrough:false,underlined:false}],
+    [{text:"Get Keys Today!",color:"white",bold:false,italic:false,obfuscated:false,strikethrough:false,underlined:false}],
+    [{text:"/vote",color:"green",bold:true,italic:false,obfuscated:false,strikethrough:false,underlined:false}],
+  ]
+};
+
+function mkSeg(overrides={}) {
+  return {text:"",color:"white",bold:false,italic:false,obfuscated:false,strikethrough:false,underlined:false,...overrides};
+}
+
+// ─── NBT Parser ───
+function fixNbt(s) {
+  return s
+    .replace(/([{,\[]\s*)([a-zA-Z_]\w*)(\s*:)/g, (_,pre,k,post) => `${pre}"${k}"${post}`)
+    .replace(/\b1b\b/g,"true").replace(/\b0b\b/g,"false");
+}
+function parseSeg(s) {
+  return {
+    text:s.text||"",color:s.color||"white",
+    bold:!!s.bold,italic:!!s.italic,
+    obfuscated:!!s.obfuscated,strikethrough:!!s.strikethrough,underlined:!!s.underlined
+  };
+}
+function parseNbt(str) {
+  try {
+    const cleaned = str.trim().replace(/^Value:\s*'/,"").replace(/'$/,"")
+      .replace(/[\r\n\t]+/g," ");
+    const obj = JSON.parse(fixNbt(cleaned));
+    const c = obj.components||{};
+    const n = c["minecraft:custom_name"];
+    const l = c["minecraft:lore"]||[];
+    return {
+      id: (obj.id||"minecraft:stone").replace(/^minecraft:/,""),
+      count: obj.count||1,
+      displayName: n?.extra?.map(parseSeg)||[mkSeg()],
+      lore: l.length ? l.map(ln=>ln.extra?.map(parseSeg)||[mkSeg()]) : [[mkSeg({color:"gray"})]],
+      glint: !!c["minecraft:enchantment_glint_override"],
+      hideAttrs: !!c["minecraft:attribute_modifiers"],
+      hideTooltip: !!c["minecraft:hide_additional_tooltip"],
+    };
+  } catch(e) { return null; }
+}
+
+// ─── NBT Generator ───
+function toNbtSeg(s) {
+  const t = s.text.replace(/\\/g,"\\\\").replace(/"/g,'\\"');
+  return `{bold:${s.bold?'1b':'0b'},color:"${s.color}",italic:${s.italic?'1b':'0b'},obfuscated:${s.obfuscated?'1b':'0b'},strikethrough:${s.strikethrough?'1b':'0b'},text:"${t}",underlined:${s.underlined?'1b':'0b'}}`;
+}
+function genValue() {
+  const id = state.id.includes(":") ? state.id : `minecraft:${state.id}`;
+  const nm = `{extra:[${state.displayName.map(toNbtSeg).join(",")}],text:""}`;
+  const lm = `[${state.lore.map(l=>`{extra:[${l.map(toNbtSeg).join(",")}],text:""}`).join(",")}]`;
+  const parts = [
+    `"minecraft:custom_name":${nm}`,
+    `"minecraft:lore":${lm}`,
+  ];
+  if(state.glint) parts.push(`"minecraft:enchantment_glint_override":1b`);
+  if(state.hideAttrs) parts.push(`"minecraft:attribute_modifiers":{modifiers:[],show_in_tooltip:0b}`);
+  if(state.hideTooltip) parts.push(`"minecraft:hide_additional_tooltip":{}`);
+  return `{components:{${parts.join(",")}},count:${state.count},id:"${id}"}`;
+}
+
+
+// ─── Segment card HTML ───
+function segCardHtml(seg, segId, removeJs) {
+  const isHex = seg.color && seg.color.startsWith("#");
+  const namedVal = isHex ? "__hex__" : (seg.color || "white");
+  const pickerVal = resolveHex(seg.color);
+  const fmts = [
+    ["bold","B","bold-btn"],["italic","I","italic-btn"],
+    ["strikethrough","S","strike-btn"],["underlined","U","under-btn"],["obfuscated","O",""]
+  ];
+  const fmtBtns = fmts.map(([k,lbl,cls])=>`
+    <button class="fmt-btn ${cls}${seg[k]?' active':''}" title="${k}"
+      onclick="toggleFmt('${segId}','${k}')">${lbl}</button>
+  `).join("");
+  const namedOpts = `<option value="__hex__"${isHex?" selected":""}>⬡ Hex</option>`+
+    Object.entries(COLOR_LABELS).map(([k,v])=>`<option value="${k}"${k===namedVal?" selected":""}>${v}</option>`).join("");
+  return `
+    <div class="seg-card" id="${segId}">
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
+      <input class="seg-text" type="text" value="${escHtml(seg.text)}"
+        placeholder="text..." oninput="syncStateFromDOM();render()"/>
+      <div class="color-wrap">
+        <input type="color" class="color-picker" value="${pickerVal}" title="Pick color"
+          oninput="onColorPick('${segId}',this.value)">
+        <select class="color-select" onchange="onColorSelect('${segId}',this.value)">${namedOpts}</select>
+        <input type="text" class="hex-input" placeholder="#RRGGBB" value="${isHex?seg.color:''}"
+          style="display:${isHex?'inline-block':'none'}"
+          oninput="onHexInput('${segId}',this.value)">
+      </div>
+      <div class="fmt-btns">${fmtBtns}</div>
+      ${removeJs?`<button class="remove-btn" title="remove segment" onclick="${removeJs}">×</button>`:''}
+    </div>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function getSegRef(segId) {
+  if(segId.startsWith("ns_")) return state.displayName[parseInt(segId.slice(3))];
+  const p = segId.slice(3).split("_");
+  return state.lore[parseInt(p[0])][parseInt(p[1])];
+}
+
+function onColorPick(segId, hex) {
+  const seg = getSegRef(segId); if(!seg) return;
+  seg.color = hex;
+  const card = document.getElementById(segId); if(!card) return;
+  card.querySelector(".color-select").value = "__hex__";
+  const hi = card.querySelector(".hex-input");
+  hi.value = hex; hi.style.display = "inline-block";
+  render();
+}
+
+function onColorSelect(segId, val) {
+  const seg = getSegRef(segId); if(!seg) return;
+  const card = document.getElementById(segId); if(!card) return;
+  const hi = card.querySelector(".hex-input");
+  const picker = card.querySelector(".color-picker");
+  if(val === "__hex__") {
+    const current = MC_COLORS[seg.color] || seg.color || "#ffffff";
+    seg.color = current;
+    hi.value = current; hi.style.display = "inline-block";
+    picker.value = current;
+  } else {
+    seg.color = val;
+    hi.style.display = "none";
+    picker.value = MC_COLORS[val] || "#ffffff";
+  }
+  render();
+}
+
+function onHexInput(segId, val) {
+  const seg = getSegRef(segId); if(!seg) return;
+  if(/^#[0-9a-fA-F]{6}$/.test(val)) {
+    seg.color = val;
+    const card = document.getElementById(segId);
+    if(card) card.querySelector(".color-picker").value = val;
+    render();
+  }
+}
+
+// ─── Build UI from state ───
+function buildNameUI() {
+  const container = document.getElementById("nameSegs");
+  let html = "";
+  state.displayName.forEach((seg,i) => {
+    const segId = `ns_${i}`;
+    const removeJs = state.displayName.length > 1 ? `removeNameSeg(${i})` : "";
+    html += segCardHtml(seg, segId, removeJs);
+  });
+  container.innerHTML = html;
+  attachNameDragHandlers();
+}
+
+function buildLoreUI() {
+  const container = document.getElementById("loreLines");
+  let html = "";
+  state.lore.forEach((line,li) => {
+    html += `<div class="lore-line" id="ll_${li}">
+      <div class="lore-line-header">
+        <div style="display:flex;align-items:center;gap:4px">
+          <span class="drag-handle" title="Drag to reorder lines">⠿</span>
+          <span class="line-num">line ${li+1}</span>
+        </div>
+        <div class="lore-line-btns">
+          <button class="btn" onclick="addLoreSeg(${li})">+ seg</button>
+          <button class="btn danger" onclick="removeLoreLine(${li})">remove</button>
+        </div>
+      </div>
+      <div id="ll_${li}_segs">`;
+    line.forEach((seg,si) => {
+      const segId = `ls_${li}_${si}`;
+      const removeJs = line.length > 1 ? `removeLoreSeg(${li},${si})` : "";
+      html += segCardHtml(seg, segId, removeJs);
+    });
+    html += `</div></div>`;
+  });
+  container.innerHTML = html;
+  attachLoreDragHandlers();
+}
+
+function readSegColor(card) {
+  const sel = card.querySelector(".color-select");
+  if(sel.value === "__hex__") return card.querySelector(".hex-input").value || "#ffffff";
+  return sel.value;
+}
+
+// ─── Sync state from DOM (called on every input) ───
+function syncStateFromDOM() {
+  state.displayName.forEach((seg,i) => {
+    const card = document.getElementById(`ns_${i}`);
+    if(!card) return;
+    seg.text = card.querySelector(".seg-text").value;
+    seg.color = readSegColor(card);
+  });
+  state.lore.forEach((line,li) => {
+    line.forEach((seg,si) => {
+      const card = document.getElementById(`ls_${li}_${si}`);
+      if(!card) return;
+      seg.text = card.querySelector(".seg-text").value;
+      seg.color = readSegColor(card);
+    });
+  });
+  state.id = document.getElementById("itemId").value.trim() || "stone";
+  state.count = Math.max(1, parseInt(document.getElementById("itemCount").value)||1);
+  state.glint = document.getElementById("glintToggle").checked;
+  state.hideAttrs = document.getElementById("hideAttrsToggle").checked;
+  state.hideTooltip = document.getElementById("hideTooltipToggle").checked;
+}
+
+function toggleFmt(segId, key) {
+  syncStateFromDOM();
+  // find which seg this is
+  if(segId.startsWith("ns_")) {
+    const i = parseInt(segId.slice(3));
+    state.displayName[i][key] = !state.displayName[i][key];
+  } else {
+    const parts = segId.slice(3).split("_");
+    const li = parseInt(parts[0]), si = parseInt(parts[1]);
+    state.lore[li][si][key] = !state.lore[li][si][key];
+  }
+  buildNameUI(); buildLoreUI(); syncSettingsToDOM(); render();
+}
+
+function syncSettingsToDOM() {
+  document.getElementById("itemId").value = state.id;
+  document.getElementById("itemCount").value = state.count;
+  document.getElementById("glintToggle").checked = state.glint;
+  document.getElementById("hideAttrsToggle").checked = state.hideAttrs;
+  document.getElementById("hideTooltipToggle").checked = state.hideTooltip;
+}
+
+// ─── Drag and drop ───
+let _dragSrc = null;
+
+function _moveItem(arr, from, to, before) {
+  const [moved] = arr.splice(from, 1);
+  let at = to > from ? to - 1 : to;
+  if (!before) at++;
+  arr.splice(Math.max(0, Math.min(at, arr.length)), 0, moved);
+}
+
+function _clearDrop() {
+  document.querySelectorAll('.drop-top,.drop-bottom').forEach(e => e.classList.remove('drop-top','drop-bottom'));
+  document.querySelectorAll('.dragging').forEach(e => e.classList.remove('dragging'));
+}
+
+function _setupDrag(el, handle, srcData, typeMatch) {
+  el.draggable = false;
+  handle.addEventListener('mousedown', () => { el.draggable = true; });
+  handle.addEventListener('mouseup',   () => { setTimeout(() => { el.draggable = false; }, 150); });
+
+  el.addEventListener('dragstart', e => {
+    _dragSrc = srcData;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '1'); // required by Firefox
+    setTimeout(() => el.classList.add('dragging'), 0);
+    e.stopPropagation();
+  });
+
+  el.addEventListener('dragend', () => {
+    el.draggable = false;
+    _clearDrop();
+    _dragSrc = null;
+  });
+
+  el.addEventListener('dragover', e => {
+    if (!_dragSrc || !typeMatch(_dragSrc)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    _clearDrop();
+    const r = el.getBoundingClientRect();
+    el.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-top' : 'drop-bottom');
+  });
+
+  el.addEventListener('dragleave', e => {
+    if (!el.contains(e.relatedTarget)) el.classList.remove('drop-top','drop-bottom');
+  });
+
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!_dragSrc || !typeMatch(_dragSrc)) return;
+    _clearDrop();
+    syncStateFromDOM();
+    const r = el.getBoundingClientRect();
+    const before = e.clientY < r.top + r.height / 2;
+
+    if (_dragSrc.type === 'ns' && srcData.type === 'ns' && _dragSrc.i !== srcData.i) {
+      _moveItem(state.displayName, _dragSrc.i, srcData.i, before);
+      buildNameUI();
+    } else if (_dragSrc.type === 'line' && srcData.type === 'line' && _dragSrc.li !== srcData.li) {
+      _moveItem(state.lore, _dragSrc.li, srcData.li, before);
+      buildLoreUI();
+    } else if (_dragSrc.type === 'seg' && srcData.type === 'seg'
+               && _dragSrc.li === srcData.li && _dragSrc.si !== srcData.si) {
+      _moveItem(state.lore[srcData.li], _dragSrc.si, srcData.si, before);
+      buildLoreUI();
+    }
+
+    _dragSrc = null;
+    render();
+  });
+}
+
+function attachNameDragHandlers() {
+  state.displayName.forEach((_, i) => {
+    const el = document.getElementById(`ns_${i}`);
+    if (!el) return;
+    const handle = el.querySelector('.drag-handle');
+    if (!handle) return;
+    _setupDrag(el, handle, {type:'ns', i}, s => s.type === 'ns');
+  });
+}
+
+function attachLoreDragHandlers() {
+  state.lore.forEach((line, li) => {
+    const lineEl = document.getElementById(`ll_${li}`);
+    if (lineEl) {
+      const handle = lineEl.querySelector(':scope > .lore-line-header .drag-handle');
+      if (handle) _setupDrag(lineEl, handle, {type:'line', li}, s => s.type === 'line');
+    }
+    line.forEach((_, si) => {
+      const el = document.getElementById(`ls_${li}_${si}`);
+      if (!el) return;
+      const handle = el.querySelector('.drag-handle');
+      if (!handle) return;
+      _setupDrag(el, handle, {type:'seg', li, si}, s => s.type === 'seg' && s.li === li);
+    });
+  });
+}
+
+// ─── Mutations ───
+function addNameSeg() { syncStateFromDOM(); state.displayName.push(mkSeg()); buildNameUI(); render(); }
+function removeNameSeg(i) { syncStateFromDOM(); state.displayName.splice(i,1); buildNameUI(); render(); }
+function addLoreLine() { syncStateFromDOM(); state.lore.push([mkSeg({color:"gray"})]); buildLoreUI(); render(); }
+function removeLoreLine(li) { syncStateFromDOM(); state.lore.splice(li,1); if(!state.lore.length) state.lore.push([mkSeg({color:"gray"})]); buildLoreUI(); render(); }
+function addLoreSeg(li) { syncStateFromDOM(); state.lore[li].push(mkSeg({color:"gray"})); buildLoreUI(); render(); }
+function removeLoreSeg(li,si) { syncStateFromDOM(); state.lore[li].splice(si,1); buildLoreUI(); render(); }
+
+// ─── Preview renderer ───
+function resolveHex(color) {
+  return MC_COLORS[color] || (color&&color.startsWith("#") ? color : "#ffffff");
+}
+
+function renderSegHtml(segs) {
+  return segs.map(s => {
+    const color = resolveHex(s.color);
+    const td = [s.strikethrough&&"line-through",s.underlined&&"underline"].filter(Boolean).join(" ")||"none";
+    const fs = s.italic?"italic":"normal";
+    const fw = s.bold?"bold":"normal";
+    const text = s.obfuscated ? (s.text||"").split("").map(()=>"▒").join("")||"▒▒▒▒" : (escHtml(s.text)||"");
+    return `<span style="color:${color};font-weight:${fw};font-style:${fs};text-decoration:${td}">${text}</span>`;
+  }).join("");
+}
+
+function render() {
+  syncStateFromDOM();
+  // Update preview
+  const preview = document.getElementById("mcPreview");
+  let html = `<div class="mc-name-row">${renderSegHtml(state.displayName)}`;
+  if(state.glint) html += `<span style="color:#9090ff;font-size:13px;margin-left:5px">✦</span>`;
+  html += `</div>`;
+  state.lore.forEach(line => {
+    const empty = line.every(s=>!s.text);
+    if(empty) { html += `<div class="mc-spacer"></div>`; return; }
+    html += `<div class="mc-lore-line">${renderSegHtml(line)}</div>`;
+  });
+  preview.innerHTML = html;
+  // Update output
+  const out = genValue();
+  document.getElementById("outputBox").value = out;
+}
+
+// ─── Parse panel ───
+function toggleParse() {
+  const panel = document.getElementById("parsePanel");
+  const btn = document.getElementById("toggleParseBtn");
+  const visible = panel.style.display !== "none";
+  panel.style.display = visible ? "none" : "block";
+  btn.textContent = visible ? "📋 paste existing value" : "✕ close";
+  document.getElementById("parseError").style.display = "none";
+}
+function loadParsed() {
+  const str = document.getElementById("parseInput").value;
+  const result = parseNbt(str);
+  if(result) {
+    state = result;
+    buildNameUI(); buildLoreUI(); syncSettingsToDOM();
+    document.getElementById("parseError").style.display = "none";
+    toggleParse();
+    render();
+  } else {
+    document.getElementById("parseError").style.display = "block";
+  }
+}
+
+// ─── Copy ───
+function copyText(which) {
+  const out = document.getElementById("outputBox").value;
+  const text = which==="val" ? `Value: '${out}'` : out;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn = document.getElementById(which==="val"?"copyVal":"copyNbt");
+    const orig = btn.textContent;
+    btn.textContent = "✓ copied!";
+    btn.classList.add("copied");
+    setTimeout(()=>{ btn.textContent=orig; btn.classList.remove("copied"); },2000);
+  });
+}
+
+// ─── Init ───
+buildNameUI();
+buildLoreUI();
+syncSettingsToDOM();
+render();
+</script>
+</body>
+</html>
