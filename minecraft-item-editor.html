@@ -282,6 +282,10 @@
           <label>count</label>
           <input type="number" id="itemCount" min="1" max="64" value="1" oninput="render()"/>
         </div>
+        <div class="field" style="width:90px">
+          <label>model data</label>
+          <input type="number" id="modelData" placeholder="none" min="0" oninput="render()"/>
+        </div>
       </div>
       <div class="toggle-row">
         <label class="toggle"><input type="checkbox" id="glintToggle" onchange="render()"/> ✦ enchant glint</label>
@@ -395,6 +399,7 @@ let state = {
   glint: false,
   hideAttrs: false,
   hideTooltip: false,
+  customModelData: "",
   version: "26.1+",
   giveTarget: "@p",
   customTarget: "",
@@ -443,9 +448,17 @@ function parseNbt(str) {
     const c = obj.components||{};
     const n = c["minecraft:custom_name"];
     const l = c["minecraft:lore"]||[];
+    const cmd_raw = c["minecraft:custom_model_data"];
+    let customModelData = "";
+    if(cmd_raw !== undefined && cmd_raw !== null) {
+      if(typeof cmd_raw === "number") customModelData = String(cmd_raw);
+      else if(cmd_raw && Array.isArray(cmd_raw.floats) && cmd_raw.floats.length)
+        customModelData = String(cmd_raw.floats[0]);
+    }
     return {
       id: (obj.id||"minecraft:stone").replace(/^minecraft:/,""),
       count: obj.count||1,
+      customModelData,
       displayName: n?.extra?.map(parseSeg)||[mkSeg()],
       lore: l.length ? l.map(ln=>ln.extra?.map(parseSeg)||[mkSeg()]) : [[mkSeg({color:"gray"})]],
       glint: !!c["minecraft:enchantment_glint_override"],
@@ -457,7 +470,9 @@ function parseNbt(str) {
 
 // ─── Give Command Generator ───
 // Versions where 1.21.5 text-component-as-NBT applies
-const V_NEW = ["26.1+","1.21.11","1.21.9","1.21.6-1.21.8","1.21.5"];
+const V_NEW    = ["26.1+","1.21.11","1.21.9","1.21.6-1.21.8","1.21.5"];
+// Versions where custom_model_data uses {floats:[N]} (changed in 1.21.4)
+const V_MD_NEW = ["26.1+","1.21.11","1.21.9","1.21.6-1.21.8","1.21.5","1.21.4"];
 
 /* ── Pre-1.21.5: text component as JSON string ── */
 function segToJson(seg) {
@@ -535,6 +550,14 @@ function genGiveCmd() {
     if(state.hideTooltip)parts.push("minecraft:hide_additional_tooltip={}");
   }
 
+  const md = state.customModelData.trim();
+  if(md !== "") {
+    const mdVal = V_MD_NEW.includes(ver)
+      ? `{floats:[${parseFloat(md)}]}`
+      : String(parseInt(md));
+    parts.push(`minecraft:custom_model_data=${mdVal}`);
+  }
+
   return `${cmd} ${target} ${rawId}[${parts.join(",")}] ${state.count}`;
 }
 
@@ -579,6 +602,13 @@ function genValue() {
     `"minecraft:custom_name":${nm}`,
     `"minecraft:lore":${lm}`,
   ];
+  const md = state.customModelData.trim();
+  if(md !== "") {
+    const mdVal = V_MD_NEW.includes(state.version)
+      ? `{floats:[${parseFloat(md)}]}`
+      : String(parseInt(md));
+    parts.push(`"minecraft:custom_model_data":${mdVal}`);
+  }
   if(state.glint) parts.push(`"minecraft:enchantment_glint_override":1b`);
   if(state.hideAttrs) parts.push(`"minecraft:attribute_modifiers":{modifiers:[],show_in_tooltip:0b}`);
   if(state.hideTooltip) parts.push(`"minecraft:hide_additional_tooltip":{}`);
@@ -731,6 +761,7 @@ function syncStateFromDOM() {
   });
   state.id = document.getElementById("itemId").value.trim() || "stone";
   state.count = Math.max(1, parseInt(document.getElementById("itemCount").value)||1);
+  state.customModelData = document.getElementById("modelData").value;
   state.glint = document.getElementById("glintToggle").checked;
   state.hideAttrs = document.getElementById("hideAttrsToggle").checked;
   state.hideTooltip = document.getElementById("hideTooltipToggle").checked;
@@ -756,6 +787,7 @@ function toggleFmt(segId, key) {
 function syncSettingsToDOM() {
   document.getElementById("itemId").value = state.id;
   document.getElementById("itemCount").value = state.count;
+  document.getElementById("modelData").value = state.customModelData || "";
   document.getElementById("glintToggle").checked = state.glint;
   document.getElementById("hideAttrsToggle").checked = state.hideAttrs;
   document.getElementById("hideTooltipToggle").checked = state.hideTooltip;
